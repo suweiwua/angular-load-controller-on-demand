@@ -2,76 +2,54 @@
 
 define([], function () {
 
-    var routeResolver = function () {
+    var resolverMod = angular.module('resolverMod', []);
+
+    var resolverProvider = function () {
 
         this.$get = function () {
             return this;
         };
 
-        this.routeConfig = function () {
-            var viewsDirectory = '/js/business/',
-                controllersDirectory = '/js/business/',
+        this.resolve = function (opt) {
 
-            setBaseDirectories = function (viewsDir, controllersDir) {
-                viewsDirectory = viewsDir;
-                controllersDirectory = controllersDir;
-            },
-
-            getViewsDirectory = function () {
-                return viewsDirectory;
-            },
-
-            getControllersDirectory = function () {
-                return controllersDirectory;
+            var defaults = {
+                baseName: '',   //约定的模块名
+                path: '',       //子目录
+                controllerSuffix: '',   //控制器后缀
+                controllerFileSuffix: '.js',    //控制器文件后缀
+                templateFileSuffix: '.html',    //模板文件后缀
+                templateDir: '/js/business/',   //模板目录
+                controllerDir: '/js/business/'  //控制器目录
             };
 
-            return {
-                setBaseDirectories: setBaseDirectories,
-                getControllersDirectory: getControllersDirectory,
-                getViewsDirectory: getViewsDirectory
-            };
-        }();
+            var config = angular.extend({}, defaults, opt);
 
-        this.route = function (routeConfig) {
+            //路由配置
+            config.routeDef = angular.extend({}, config.routeDef, {
+                templateUrl: config.templateDir + config.path + config.baseName + config.templateFileSuffix,
+                controller: config.baseName + config.controllerSuffix,
+            });
 
-            var resolve = function (baseName, path, secure) {
-                if (!path) path = '';
+            config.routeDef.resolve = angular.extend({}, config.routeDef.resolve, {
+                //按需加载核心
+                load_on_need: ['$q', function ( $q ) {
 
-                var controllerFileSuffix = '.js';
-                var templateFileSuffix = '.html';
-                var controllerSuffix = '';
-                var routeDef = {};
-                routeDef.templateUrl = routeConfig.getViewsDirectory() + path + baseName + templateFileSuffix;
-                routeDef.controller = baseName + controllerSuffix;
-                routeDef.secure = (secure) ? secure : false;
-                routeDef.resolve = {
-                    load: ['$q', '$rootScope', function ($q, $rootScope) {
-                        var dependencies = [routeConfig.getControllersDirectory() + path + baseName + controllerFileSuffix];
-                        return resolveDependencies($q, $rootScope, dependencies);
-                    }]
-                };
+                    var defer = $q.defer();
+                    var controllerUrl = config.controllerDir + config.path + config.baseName + config.controllerFileSuffix;
+                    var dependencies = [controllerUrl];
 
-                return routeDef;
-            },
+                    require(dependencies, function () {
+                        //加载成功后改变promise状态为resolve
+                        defer.resolve();
+                    });
 
-            resolveDependencies = function ($q, $rootScope, dependencies) {
-                var defer = $q.defer();
-                require(dependencies, function () {
-                    defer.resolve();
-                });
+                    return defer.promise;
+                }]
+            });
 
-                return defer.promise;
-            };
-
-            return {
-                resolve: resolve
-            }
-        }(this.routeConfig);
-
+            return config.routeDef;
+        }
     };
 
-    var servicesApp = angular.module('routeResolverServices', []);
-
-    //Must be a provider since it will be injected into module.config()    
-    servicesApp.provider('routeResolver', routeResolver);
+    resolverMod.provider('routeResolver', resolverProvider);
 });
